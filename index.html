@@ -83,9 +83,15 @@ if (!canale || !servizio || !seq) {
     b.onclick = () => esegui(() => rimanda(quando));
     box.appendChild(b);
   }
+  const campoData = document.getElementById("data");
+  const due = n => String(n).padStart(2, "0");
+  const ora = new Date();
+  campoData.min = `${ora.getFullYear()}-${due(ora.getMonth() + 1)}-${due(ora.getDate())}` +
+                  `T${due(ora.getHours())}:${due(ora.getMinutes())}`;
   document.getElementById("conferma").onclick = () => {
-    const v = document.getElementById("data").value;
+    const v = campoData.value;
     if (!v) { esito.textContent = "Scegli prima data e ora."; return; }
+    if (new Date(v) <= new Date()) { esito.textContent = "Scegli un orario futuro."; return; }
     esegui(() => rimanda(new Date(v)));
   };
   document.getElementById("spegni").onclick = () => esegui(async () => {
