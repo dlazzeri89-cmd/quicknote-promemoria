@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prova promemoria</title></head>
+<body style="font-family:system-ui;padding:24px 16px;background:#FBF8F4;color:#1F1D1B">
+<h1 id="t">…</h1>
+<button id="r" style="display:block;width:100%;padding:14px;margin:8px 0">Rimanda 1 minuto</button>
+<button id="s" style="display:block;width:100%;padding:14px;margin:8px 0">Avvisa il PC</button>
+<p id="e"></p>
+<script type="module">
+const p = new URLSearchParams(location.hash.slice(1));
+const c = p.get("c"), s = p.get("s"), q = p.get("q"), t = p.get("t");
+document.getElementById("t").textContent = t;
+const e = document.getElementById("e");
+document.getElementById("r").onclick = async () => {
+  try {
+    const r = await fetch("https://ntfy.sh", { method: "POST", body: JSON.stringify(
+      { topic: c, title: "Dalla pagina", message: t, sequence_id: q,
+        delay: String(Math.floor(Date.now() / 1000) + 60) }) });
+    e.textContent = r.ok ? "Ok, arriva fra un minuto" : "Errore " + r.status;
+  } catch (x) { e.textContent = "Errore: " + x.message; }
+};
+document.getElementById("s").onclick = async () => {
+  try {
+    const r = await fetch("https://ntfy.sh/" + s, { method: "POST",
+      body: JSON.stringify({ tipo: "prova", q: q }) });
+    e.textContent = r.ok ? "PC avvisato" : "Errore " + r.status;
+  } catch (x) { e.textContent = "Errore: " + x.message; }
+};
+</script></body></html>
