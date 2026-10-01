@@ -1,30 +1,98 @@
 <!doctype html>
-<html lang="it"><head><meta charset="utf-8">
+<html lang="it">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prova promemoria</title></head>
-<body style="font-family:system-ui;padding:24px 16px;background:#FBF8F4;color:#1F1D1B">
-<h1 id="t">…</h1>
-<button id="r" style="display:block;width:100%;padding:14px;margin:8px 0">Rimanda 1 minuto</button>
-<button id="s" style="display:block;width:100%;padding:14px;margin:8px 0">Avvisa il PC</button>
-<p id="e"></p>
+<title>Promemoria QuickNote</title>
+<style>
+  :root { --calce:#FBF8F4; --ghisa:#1F1D1B; --ossido:#9C4A28; --cemento:#706A60; --linea:rgba(31,29,27,.15); }
+  body { margin:0; padding:24px 16px; background:var(--calce); color:var(--ghisa);
+         font-family:system-ui, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; overflow-wrap:anywhere; }
+  .sotto { color:var(--cemento); margin:0 0 20px; font-size:14px; }
+  button, input { font:inherit; }
+  .scelta { display:block; width:100%; margin:0 0 10px; padding:14px; text-align:left;
+            border:1px solid var(--linea); border-radius:12px; background:#fff;
+            color:var(--ossido); font-weight:600; }
+  .riga { display:flex; gap:8px; margin:16px 0 10px; }
+  .riga input { flex:1; min-width:0; padding:12px; border:1px solid var(--linea); border-radius:12px; }
+  .riga button { padding:12px 16px; border:1px solid var(--ossido); border-radius:12px;
+                 background:#fff; color:var(--ossido); font-weight:600; }
+  #spegni { color:var(--cemento); }
+  #esito { margin-top:20px; font-weight:600; }
+</style>
+</head>
+<body>
+<h1 id="titolo">Promemoria</h1>
+<p class="sotto">Quando te la ripropongo?</p>
+<div id="scelte"></div>
+<div class="riga"><input type="datetime-local" id="data"><button id="conferma">Conferma</button></div>
+<button class="scelta" id="spegni">Disattiva il promemoria</button>
+<p id="esito"></p>
 <script type="module">
+import { URL, MAX_CODA_S, costruisciMessaggio, scelteRapide } from "./messaggio.js";
+
 const p = new URLSearchParams(location.hash.slice(1));
-const c = p.get("c"), s = p.get("s"), q = p.get("q"), t = p.get("t");
-document.getElementById("t").textContent = t;
-const e = document.getElementById("e");
-document.getElementById("r").onclick = async () => {
-  try {
-    const r = await fetch("https://ntfy.sh", { method: "POST", body: JSON.stringify(
-      { topic: c, title: "Dalla pagina", message: t, sequence_id: q,
-        delay: String(Math.floor(Date.now() / 1000) + 60) }) });
-    e.textContent = r.ok ? "Ok, arriva fra un minuto" : "Errore " + r.status;
-  } catch (x) { e.textContent = "Errore: " + x.message; }
-};
-document.getElementById("s").onclick = async () => {
-  try {
-    const r = await fetch("https://ntfy.sh/" + s, { method: "POST",
-      body: JSON.stringify({ tipo: "prova", q: q }) });
-    e.textContent = r.ok ? "PC avvisato" : "Errore " + r.status;
-  } catch (x) { e.textContent = "Errore: " + x.message; }
-};
-</script></body></html>
+const canale = p.get("c"), servizio = p.get("s"), seq = p.get("q"), titolo = p.get("t") || "Nota";
+const pagina = location.origin + location.pathname;
+const esito = document.getElementById("esito");
+document.getElementById("titolo").textContent = titolo;
+
+async function cancella() {
+  const r = await fetch(`${URL}/${canale}/${seq}/delete`);
+  if (!r.ok) throw new Error(`cancellazione ${r.status}`);
+  return (await r.json()).id;
+}
+
+async function avvisaPc(dati) {
+  const r = await fetch(`${URL}/${servizio}`, { method: "POST", body: JSON.stringify(dati) });
+  if (!r.ok) throw new Error(`avviso al PC ${r.status}`);
+}
+
+async function rimanda(quando) {
+  const q = Math.floor(quando.getTime() / 1000), ora = Math.floor(Date.now() / 1000);
+  if (q - ora <= MAX_CODA_S) {
+    // entro 3 giorni: in coda direttamente, stesso codice nota (sostituisce il precedente)
+    const m = costruisciMessaggio(canale, servizio, pagina, seq, titolo, q - ora >= 15 ? q : null);
+    const r = await fetch(URL, { method: "POST", body: JSON.stringify(m) });
+    if (!r.ok) throw new Error(`invio ${r.status}`);
+  } else {
+    // oltre 3 giorni il servizio non lo tiene: lo prende il PC dal canale di servizio
+    const id = await cancella();
+    await avvisaPc({ tipo: "rinvio", q: seq, quando: q, cancellazione: id });
+  }
+  esito.textContent = "Ok, torna " + quando.toLocaleString("it-IT",
+    { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+async function esegui(azione) {
+  esito.textContent = "…";
+  try { await azione(); }
+  catch (e) { esito.textContent = `Non riuscito (${e.message}): riprova.`; }
+}
+
+if (!canale || !servizio || !seq) {
+  esito.textContent = "Link incompleto: apri la pagina dal bottone della notifica.";
+} else {
+  const box = document.getElementById("scelte");
+  for (const [etichetta, quando] of scelteRapide(new Date())) {
+    const b = document.createElement("button");
+    b.className = "scelta";
+    b.textContent = etichetta;
+    b.onclick = () => esegui(() => rimanda(quando));
+    box.appendChild(b);
+  }
+  document.getElementById("conferma").onclick = () => {
+    const v = document.getElementById("data").value;
+    if (!v) { esito.textContent = "Scegli prima data e ora."; return; }
+    esegui(() => rimanda(new Date(v)));
+  };
+  document.getElementById("spegni").onclick = () => esegui(async () => {
+    const id = await cancella();
+    await avvisaPc({ tipo: "spento", q: seq, cancellazione: id });
+    esito.textContent = "Promemoria disattivato.";
+  });
+}
+</script>
+</body>
+</html>
