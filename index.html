@@ -20,17 +20,39 @@
                  background:#fff; color:var(--ossido); font-weight:600; }
   #spegni { color:var(--cemento); }
   #esito { margin-top:20px; font-weight:600; }
+  .schede { display:flex; background:#EEE4D6; border-radius:12px; padding:4px; margin:0 0 18px; }
+  .schede button { flex:1; padding:10px; border:none; border-radius:9px; background:transparent;
+                   font-weight:600; color:var(--cemento); }
+  .schede button.su { background:#fff; color:var(--ossido); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  textarea { width:100%; box-sizing:border-box; min-height:160px; padding:12px; font:inherit; font-size:16px;
+             border:1px solid var(--ossido); border-radius:12px; background:#fff; color:var(--ghisa); resize:none; }
+  .pieno { display:block; width:100%; margin:10px 0 6px; padding:14px; font-weight:700;
+           border:none; border-radius:12px; background:var(--ossido); color:var(--calce); }
+  .nota { color:var(--cemento); font-size:13px; margin:0 0 22px; }
+  [hidden] { display:none !important; }
 </style>
 </head>
 <body>
 <h1 id="titolo">Promemoria</h1>
-<p class="sotto">Quando te la ripropongo?</p>
-<div id="scelte"></div>
-<div class="riga"><input type="datetime-local" id="data"><button id="conferma">Conferma</button></div>
-<button class="scelta" id="spegni">Disattiva il promemoria</button>
+<p class="sotto">Cosa vuoi fare?</p>
+<div class="schede">
+  <button id="scheda-rispondi" class="su">Rispondi</button>
+  <button id="scheda-rimanda">Rimanda</button>
+</div>
+<div id="pannello-rispondi">
+  <textarea id="risposta" maxlength="1000" aria-label="La tua risposta"></textarea>
+  <button class="pieno" id="manda">Manda a Claude</button>
+  <p class="nota">La legge Claude al giro delle 6:30 e quando apri una sessione. Se il PC resta spento più di 12 ore, la risposta si perde.</p>
+</div>
+<div id="pannello-rimanda" hidden>
+  <p class="sotto">Quando te la ripropongo?</p>
+  <div id="scelte"></div>
+  <div class="riga"><input type="datetime-local" id="data"><button id="conferma">Conferma</button></div>
+  <button class="scelta" id="spegni">Disattiva il promemoria</button>
+</div>
 <p id="esito"></p>
 <script type="module">
-import { URL, MAX_CODA_S, costruisciMessaggio, scelteRapide } from "./messaggio.js";
+import { URL, MAX_CODA_S, costruisciMessaggio, scelteRapide, avvisoRisposta } from "./messaggio.js";
 
 const p = new URLSearchParams(location.hash.slice(1));
 const canale = p.get("c"), servizio = p.get("s"), seq = p.get("q"), titolo = p.get("t") || "Nota";
@@ -72,6 +94,16 @@ async function esegui(azione) {
   catch (e) { esito.textContent = `Non riuscito (${e.message}): riprova.`; }
 }
 
+function scheda(quale) {
+  for (const n of ["rispondi", "rimanda"]) {
+    document.getElementById("scheda-" + n).classList.toggle("su", n === quale);
+    document.getElementById("pannello-" + n).hidden = n !== quale;
+  }
+  esito.textContent = "";
+}
+document.getElementById("scheda-rispondi").onclick = () => scheda("rispondi");
+document.getElementById("scheda-rimanda").onclick = () => scheda("rimanda");
+
 if (!canale || !servizio || !seq) {
   esito.textContent = "Link incompleto: apri la pagina dal bottone della notifica.";
 } else {
@@ -93,6 +125,17 @@ if (!canale || !servizio || !seq) {
     if (!v) { esito.textContent = "Scegli prima data e ora."; return; }
     if (new Date(v) <= new Date()) { esito.textContent = "Scegli un orario futuro."; return; }
     esegui(() => rimanda(new Date(v)));
+  };
+  // la risposta non tocca il promemoria in coda: avvisa solo il PC (04/11/2026)
+  document.getElementById("manda").onclick = () => {
+    const campo = document.getElementById("risposta");
+    const avviso = avvisoRisposta(seq, campo.value);
+    if (!avviso) { esito.textContent = "Scrivi prima la risposta."; return; }
+    esegui(async () => {
+      await avvisaPc(avviso);
+      campo.value = "";
+      esito.textContent = "Mandata. Arriva in QuickNote quando il PC è acceso";
+    });
   };
   document.getElementById("spegni").onclick = () => esegui(async () => {
     await avvisaPc({ tipo: "spento", q: seq });   // prima l'avviso, come sopra

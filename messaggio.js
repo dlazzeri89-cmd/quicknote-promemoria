@@ -42,3 +42,12 @@ export function scelteRapide(adesso) {
   scelte.push(["Lunedì 9:00", alle(piuGiorni(adesso, (7 - lunediZero) % 7 || 7), 9)]);
   return scelte;
 }
+
+export const MAX_RISPOSTA = 1000;
+
+// Avviso «risposta» dal telefono al PC (04/11/2026): testo pulito e tagliato a 1000 caratteri,
+// null se vuoto. Specchio del limite di risposte.py.
+export function avvisoRisposta(q, testo) {
+  const t = String(testo ?? "").trim().slice(0, MAX_RISPOSTA).trim();
+  return t ? { tipo: "risposta", q, testo: t } : null;
+}
