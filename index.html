@@ -52,7 +52,7 @@
 </div>
 <p id="esito"></p>
 <script type="module">
-import { URL, MAX_CODA_S, costruisciMessaggio, scelteRapide, avvisoRisposta } from "./messaggio.js";
+import { URL, MAX_CODA_S, costruisciMessaggio, scelteRapide, avvisoRisposta, unaVolta } from "./messaggio.js";
 
 const p = new URLSearchParams(location.hash.slice(1));
 const canale = p.get("c"), servizio = p.get("s"), seq = p.get("q"), titolo = p.get("t") || "Nota";
@@ -126,16 +126,18 @@ if (!canale || !servizio || !seq) {
     if (new Date(v) <= new Date()) { esito.textContent = "Scegli un orario futuro."; return; }
     esegui(() => rimanda(new Date(v)));
   };
-  // la risposta non tocca il promemoria in coda: avvisa solo il PC (04/11/2026)
-  document.getElementById("manda").onclick = () => {
+  // la risposta non tocca il promemoria in coda: avvisa solo il PC (04/11/2026).
+  // Il bottone resta fermo durante l'invio: un doppio tocco non manda due avvisi (05/11/2026)
+  const bottoneManda = document.getElementById("manda");
+  bottoneManda.onclick = () => {
     const campo = document.getElementById("risposta");
     const avviso = avvisoRisposta(seq, campo.value);
     if (!avviso) { esito.textContent = "Scrivi prima la risposta."; return; }
-    esegui(async () => {
+    unaVolta(bottoneManda, () => esegui(async () => {
       await avvisaPc(avviso);
       campo.value = "";
       esito.textContent = "Mandata. Arriva in QuickNote quando il PC è acceso";
-    });
+    }));
   };
   document.getElementById("spegni").onclick = () => esegui(async () => {
     await avvisaPc({ tipo: "spento", q: seq });   // prima l'avviso, come sopra

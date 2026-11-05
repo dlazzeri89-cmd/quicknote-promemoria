@@ -46,8 +46,18 @@ export function scelteRapide(adesso) {
 export const MAX_RISPOSTA = 1000;
 
 // Avviso «risposta» dal telefono al PC (04/11/2026): testo pulito e tagliato a 1000 caratteri,
-// null se vuoto. Specchio del limite di risposte.py.
+// null se vuoto. Specchio di risposte.pulisci: i caratteri si contano come in Python
+// (Array.from), non in unità UTF-16, che spezzavano un'emoji in coda (05/11/2026).
 export function avvisoRisposta(q, testo) {
-  const t = String(testo ?? "").trim().slice(0, MAX_RISPOSTA).trim();
+  const t = Array.from(String(testo ?? "").trim()).slice(0, MAX_RISPOSTA).join("").trim();
   return t ? { tipo: "risposta", q, testo: t } : null;
+}
+
+// Solo della pagina, senza specchio in Python (05/11/2026): il bottone resta fermo finché
+// l'invio non è finito, così un doppio tocco non manda due avvisi uguali.
+export async function unaVolta(bottone, azione) {
+  if (bottone.disabled) return;
+  bottone.disabled = true;
+  try { return await azione(); }
+  finally { bottone.disabled = false; }
 }
